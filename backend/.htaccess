@@ -1,0 +1,34 @@
+RewriteEngine On
+
+# Redirect HTTP to HTTPS
+RewriteCond %{HTTPS} off
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+# Pass HTTP Authorization Header
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Ensure API requests are routed correctly
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^api/([^/]+)$ api/$1.php [L,QSA]
+
+# Remove .php extensions for ALL files
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}\.php -f
+RewriteRule ^(.+)$ $1.php [L,QSA]
+
+# Block direct access to sensitive files
+<FilesMatch "\.(env|json|config|sql|log|ini|bak)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Block access to the config and classes folders
+RewriteRule ^(config|classes)/ - [F,L]
+
+# Enable CORS (Frontend API Access)
+<IfModule mod_headers.c>
+    Header set Access-Control-Allow-Origin "*"
+    Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+    Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+</IfModule>
