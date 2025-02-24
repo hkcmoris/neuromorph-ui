@@ -1,21 +1,21 @@
 RewriteEngine On
 
-# Redirect HTTP to HTTPS
-RewriteCond %{HTTPS} off
-RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# Redirect HTTP to HTTPS (only if not already HTTPS)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
 # Pass HTTP Authorization Header
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
-# Ensure API requests are routed correctly
+# Ensure API requests are routed correctly (only if not a file or directory)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^api/([^/]+)$ api/$1.php [L,QSA]
+RewriteRule ^api/([^/.]+)$ api/$1.php [L,QSA]
 
-# Remove .php extensions for ALL files
+# SAFELY Remove .php extensions for ALL files except APIs
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}\.php -f
-RewriteRule ^(.+)$ $1.php [L,QSA]
+RewriteRule ^([^/]+)/?$ $1.php [L,QSA]
 
 # Block direct access to sensitive files
 <FilesMatch "\.(env|json|config|sql|log|ini|bak)$">

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JWT Authentication Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 40px; }
+        input { display: block; width: 80%; margin: 10px auto; padding: 10px; }
+        button { padding: 10px 15px; cursor: pointer; }
+        #token { word-break: break-all; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <h2>Register</h2>
+    <input type="email" id="regEmail" placeholder="Email">
+    <input type="text" id="regUser" placeholder="Username">
+    <input type="password" id="regPass" placeholder="Password">
+    <button onclick="register()">Register</button>
+
+    <h2>Login</h2>
+    <input type="email" id="logEmail" placeholder="Email">
+    <input type="password" id="logPass" placeholder="Password">
+    <button onclick="login()">Login</button>
+
+    <h3>JWT Token</h3>
+    <label for="token">JWT Token</label>
+    <textarea id="token" rows="5" cols="50" readonly title="JWT Token" placeholder="Your JWT Token will appear here"></textarea>
+
+    <h2>Access Protected Endpoint</h2>
+    <button onclick="accessProtected()">Test Protected Route</button>
+    <p id="protectedResponse"></p>
+
+    <script>
+        async function register() {
+            let email = document.getElementById("regEmail").value;
+            let username = document.getElementById("regUser").value;
+            let password = document.getElementById("regPass").value;
+
+            let response = await fetch('backend/api/register.php', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, username, password })
+            });
+
+            let data = await response.json();
+            if (data.success) {
+                alert(data.success);
+            } else if (data.error) {
+                alert(data.error);
+            } else {
+                alert("Unexpected response format.");
+            }
+            console.log(data);
+        }
+
+        async function login() {
+            let email = document.getElementById("logEmail").value;
+            let password = document.getElementById("logPass").value;
+
+            let response = await fetch('backend/api/login.php', {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email, password })
+            });
+
+            let data = await response.json();
+
+            if (data.token) {
+                localStorage.setItem("jwt", data.token);
+                document.getElementById("token").value = data.token;
+            } else if (data.error) {
+                alert(data.error);
+            } else {
+                alert("Unexpected response format.");
+            }
+        }
+
+        async function accessProtected() {
+            let token = localStorage.getItem("jwt");
+            if (!token) {
+                alert("Please login first!");
+                return;
+            }
+
+            let response = await fetch('backend/api/protected.php', {
+                method: "GET",
+                headers: { "Authorization": "Bearer " + token }
+            });
+
+            let data = await response.json();
+            
+            document.getElementById("protectedResponse").innerText = JSON.stringify(data, null, 2);
+        }
+    </script>
+
+</body>
+</html>

@@ -1,32 +1,47 @@
 <?php
-require_once 'vendor/autoload.php'; // Make sure this path is correct
+require_once __DIR__ . '/../vendor/autoload.php';
 
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 use Firebase\JWT\ExpiredException;
+use Dotenv\Dotenv;
+
+// Load .env variables
+$dotenv = Dotenv::createImmutable(__DIR__ . '/../');
+$dotenv->load();
 
 class JWTHelper {
-    private static $secretKey = 'your_secret_key'; // Change this to a secure key
-    private static $issuer = 'http://devground.cz'; // Your domain
+    private static $secretKey;
+    private static $issuer;
 
-    public static function createToken($userId) {
+    public static function init() {
+        self::$secretKey = $_ENV['JWT_SECRET'] ?? 'default_secret';
+        self::$issuer = $_ENV['JWT_ISSUER'] ?? 'http://localhost';
+    }
+    
+    public static function createToken($userId, $userName) {
+        self::init();
         $issuedAt = time();
-        $expirationTime = $issuedAt + 3600; // jwt valid for 1 hour
+        $expirationTime = $issuedAt + 300; // jwt valid for 5 minutes
 
         $payload = [
             'iat' => $issuedAt,
             'iss' => self::$issuer,
             'exp' => $expirationTime,
             'data' => [
-                'userId' => $userId
+                'id' => $userId,
+                'username' => $userName
             ]
         ];
 
-        return JWT::encode($payload, self::$secretKey);
+        return JWT::encode($payload, self::$secretKey, 'HS256');
     }
 
     public static function validateToken($token) {
+        self::init();
         try {
-            $decoded = JWT::decode($token, self::$secretKey, ['HS256']);
+            $headers = new stdClass();
+            $decoded = JWT::decode($token, new Key(self::$secretKey, 'HS256'), $headers);
             return (array) $decoded->data; // Return user data
         } catch (ExpiredException $e) {
             return null; // Token expired

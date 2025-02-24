@@ -1,28 +1,25 @@
 <?php
-require_once '../config/db.php'; // Adjust the path as needed
-require_once '../classes/JWT.php'; // Include the JWT helper class
+require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../classes/User.php';
 
 header('Content-Type: application/json');
 
-$data = json_decode(file_get_contents("php://input"));
+$data = json_decode(file_get_contents('php://input'), true);
 
-if (isset($data->username) && isset($data->password)) {
-    // Connect to the database and check user credentials
-    $db = new Database();
-    $connection = $db->connect();
-
-    $stmt = $connection->prepare("SELECT id FROM users WHERE username = ? AND password = ?");
-    $stmt->execute([$data->username, md5($data->password)]); // Example: using md5 (not recommended for production)
-
-    if ($stmt->rowCount() > 0) {
-        $user = $stmt->fetch();
-        $token = JWTHelper::createToken($user['id']);
-        echo json_encode(['token' => $token]);
-    } else {
-        http_response_code(401);
-        echo json_encode(['message' => 'Invalid credentials']);
-    }
-} else {
+if (!isset($data['email'], $data['password']) || 
+    empty(trim($data['email'])) || 
+    empty(trim($data['password']))) {
     http_response_code(400);
-    echo json_encode(['message' => 'Missing username or password']);
+    echo json_encode(['error' => 'Missing email or password']);
+    exit;
 }
+
+$user = new User();
+$response = $user->login($data['email'], $data['password']);
+
+if (isset($response['error'])) {
+    http_response_code(401);
+}
+
+echo json_encode($response);
+?>
