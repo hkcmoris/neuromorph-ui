@@ -1,0 +1,1 @@
+Get-ChildItem -Recurse -Exclude node_modules, vendor | ForEach-Object { $_.FullName.Replace((Get-Location).Path, '') } | Where-Object { $_ -notmatch '\\node_modules\\' -and $_ -notmatch '\\vendor\\' } | Out-File -FilePath .\ConciseProjectStructure.txt
