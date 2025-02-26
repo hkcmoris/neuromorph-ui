@@ -19,6 +19,10 @@ const uniforms = {
     u_distanceVisualisationScale: { value: 16 },
     u_offset: { value: 0.005 },
     u_borderWidth: { value: 0.01 },
+    u_neonPower: { value: 0.5 },
+    u_neonBrightness: { value: 0.5 },
+    u_shadowDist: { value: 0.1 },
+    u_shadowBorderWidth: { value: 0.01 },
 };
 
 let geometry = new THREE.PlaneGeometry(2, 2);
@@ -71,7 +75,11 @@ resizePlane();
 
 // Set up dat.GUI
 const gui = new GUI();
-gui.add(uniforms.u_mode, 'value', { Raw: 1, Distance: 2, Gradient: 3, Solid: 4, Border: 5, SolidWithBorder: 6 }).name('Mode');
+gui.add(uniforms.u_mode, 'value', { Raw: 1, Distance: 2, Gradient: 3, Solid: 4, Border: 5, SolidWithBorder: 6, SoftBorder: 7, Neon: 8, DropShadow: 10 }).name('Mode');
 gui.add(uniforms.u_distanceVisualisationScale, 'value', 0, 100).name('Distance Visualization Scale');
 gui.add(uniforms.u_offset, 'value', -0.1, 0.1).name('Offset');
 gui.add(uniforms.u_borderWidth, 'value', 0, 0.1).name('Border Width');
+gui.add(uniforms.u_neonPower, 'value', 0, 1).name('Neon Power');
+gui.add(uniforms.u_neonBrightness, 'value', 0, 1).name('Neon Brightness');
+gui.add(uniforms.u_shadowDist, 'value', 0, 1).name('Shadow Distance');
+gui.add(uniforms.u_shadowBorderWidth, 'value', 0, 0.1).name('Shadow Border Width');
