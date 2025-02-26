@@ -9,11 +9,40 @@ uniform float u_offset;     // Offset for the effect
 uniform float u_borderWidth;  // Width of the border
 uniform float u_neonPower;  // Power for the neon effect
 uniform float u_neonBrightness;  // Brightness for the neon effect
-uniform float u_shadowDist;  // Distance for shadow
+uniform vec2 u_shadowDist;  // Distance for shadow
 uniform float u_shadowBorderWidth;  // Width of the shadow border
+uniform vec4 u_background;  // Background color
+uniform vec4 u_foreground;  // Foreground color
+uniform vec4 u_border;      // Border color
+
+// Linear interpolation functions
+float lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+vec2 lerp(vec2 a, vec2 b, float t) {
+    return a + t * (b - a);
+}
 
 vec3 lerp(vec3 a, vec3 b, float t) {
     return a + t * (b - a);
+}
+
+vec4 lerp(vec4 a, vec4 b, float t) {
+    return a + t * (b - a);
+}
+
+// Saturate function
+float saturate(float x) {
+    return clamp(x, 0.0, 1.0);
+}
+
+vec2 saturate2(vec2 x) {
+    return vec2(clamp(x, 0.0, 1.0));
+}
+
+vec3 saturate3(float x) {
+    return vec3(clamp(x, 0.0, 1.0));
 }
 
 // Signed Distance Function for a line segment
@@ -48,67 +77,69 @@ float sdf_softCircle(vec2 p, float r, float s) {
 // Main function
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
+    vec2 mouse = (u_mouse - 0.5 * u_resolution) / u_resolution.y;
+    vec2 animatedCircle = 0.005 * vec2(sin(u_time),cos(u_time));
 
-    vec3 background = vec3(0.1, 0.1, 0.2);
-    vec3 foreground = vec3(1, 0, 0.2);
-    vec3 border = vec3(0.7, 0.1, 0.2);
+    vec2 shapePos = vec2(0.2, 0.2) + animatedCircle;
+    vec2 shapeSize = vec2(0.2, 0.1);
 
-    // Button shape definition
-    //float sdf = sdf_box(uv, vec2(0.2, 0.1));
-    float sdf = sdf_softCircle(uv, 0.2, 0.15);
-    
-    //take another sample, _ShadowDist texels up/right from the first
-    float sdf_shadow = sdf_softCircle(uv + u_shadowDist, 0.2, 0.15);
+    vec2 lightDir = shapePos - mouse;
 
-    vec3 color = background;
+    // SDF shape definition
+    float sdf = sdf_box(uv - shapePos, shapeSize);
+    vec2 shadowOffset = lightDir;
+    float sdf_shadow = sdf_box(uv - shapePos - shadowOffset, shapeSize);
+
+    vec4 color = u_background;
 
     if (u_mode == 1) {
         // Raw
-        color = vec3(sdf);
+        color = vec4(saturate3(sdf), 1.0);
     } else if (u_mode == 2) {
         // Distance
-        color.r = u_distanceVisualisationScale * sdf;
-        color.g = u_distanceVisualisationScale * -sdf;
+        float d = sdf * u_distanceVisualisationScale;
+        color.r = saturate(d);
+        color.g = saturate(-d);
         color.b = 0.0;
     } else if (u_mode == 3) {
         // Gradient
         // TODO: Implement gradient visualization
-        // color.rg = abs(sdf.gb);
-        // color.b = 0;
+        color.rg = vec2(abs(sdf));
+        color.b = 0.0;
     } else if (u_mode == 4) {
         // Solid
         float d = sdf + u_offset;
         if (d < 0.0)
-            color = foreground;
+            color = u_foreground;
     } else if (u_mode == 5) {
         // Border
         float d = sdf + u_offset;
         if (abs(d) < u_borderWidth)
-            color = border;
+            color = u_border;
     } else if (u_mode == 6) {
         // SolidWithBorder
         float d = sdf + u_offset;
         if (abs(d) < u_borderWidth) {
-            color = border;
+            color = u_border;
         } else if (d < 0.0) {
-            color = foreground;
+            color = u_foreground;
         }
     } else if (u_mode == 7) {
         // Soft border
         float d = sdf + u_offset;
         if (d < -u_borderWidth) {
             //if inside shape by more than u_borderWidth, use pure fill
-            color = foreground;
+            color = u_foreground;
         } else if (d < 0.0) {
             //if inside shape but within range of border, lerp from border to fill colour
             float t = -d / u_borderWidth;
             t = t * t;
-            color = lerp(border, foreground, t);
+            color = lerp(u_border, u_foreground, t);
         } else if (d < u_borderWidth) {
             //if outside shape but within range of border, lerp from border to background colour
             float t = d / u_borderWidth;
             t = t * t;
-            color = lerp(border, background, t);
+            color = lerp(u_border, u_background, t);
         }
     } else if (u_mode == 8) {
         // Neon
@@ -122,7 +153,7 @@ void main() {
             t = 1.0 - abs(t);             //[0:1:0]
 
             //lerp between background and border using t
-            color = lerp(background, border, t);
+            color = lerp(u_background, u_border, t);
 
             //raise t to a high power and add in as white
             //to give bloom effect
@@ -134,13 +165,13 @@ void main() {
         float d2 = sdf_shadow + u_offset;
 
         //calculate interpolators (go from 0 to 1 across border)
-        float fill_t = 1.0 - ((d - u_borderWidth) / u_borderWidth);
-        float shadow_t = 1.0 - ((d2 - u_shadowBorderWidth) / u_shadowBorderWidth);
+        float fill_t = 1.0 - saturate((d - u_borderWidth) / u_borderWidth);
+        float shadow_t = 1.0 - saturate((d2 - u_shadowBorderWidth) / u_shadowBorderWidth);
 
         //apply the shadow colour, then over the top apply fill colour
-        color = lerp(color,border,shadow_t);
-        color = lerp(color,foreground,fill_t);                 
+        color = lerp(color,u_border,shadow_t);
+        color = lerp(color,u_foreground,fill_t);
     }
 
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = color;
 }
