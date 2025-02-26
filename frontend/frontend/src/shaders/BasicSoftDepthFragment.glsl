@@ -46,32 +46,38 @@ vec3 saturate3(float x) {
 }
 
 // Signed Distance Function for a line segment
-float sdf_line(vec2 p, vec2 a, vec2 b) {
+float sdLine(vec2 p, vec2 a, vec2 b) {
     vec2 pa = p - a, ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
     return length(pa - ba * h);
 }
 
 // Signed Distance Function for a box shape
-float sdf_box(vec2 p, vec2 b) {
+vec4 sdBox(vec2 p, vec2 b) {
     vec2 d = abs(p) - b;
-    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+    return vec4(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0), 0.0, 0.0, 1.0);
 }
 
 // Signed Distance Function for a soft box shape
-float sdf_softBox(vec2 p, vec2 b, float r) {
+vec4 sdSoftBox(vec2 p, vec2 b, float r) {
     vec2 d = abs(p) - b + r;
-    return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r;
+    return vec4(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0) - r, 0.0, 0.0, 1.0);
 }
 
 // Signed Distance Function for a circle shape
-float sdf_circle(vec2 p, float r) {
-    return length(p) - r;
+vec4 sdCircle(vec2 p, float r) {
+    return vec4(length(p) - r, 0.0, 0.0, 1.0);
 }
 
 // Signed Distance Function for a soft circle shape
-float sdf_softCircle(vec2 p, float r, float s) {
-    return max(length(p) - r, 0.0) - s;
+vec4 sdSoftCircle(vec2 p, float r, float s) {
+    return vec4(max(length(p) - r, 0.0) - s, 0.0, 0.0, 1.0);
+}
+
+// Signed Distance Gradiant Function for a circle shape
+vec4 sdgCircle(vec2 p, float r) {
+    float d = length(p);
+    return vec4( d-r, p/d, 1.0);
 }
 
 // Main function
@@ -82,43 +88,44 @@ void main() {
 
     vec2 shapePos = vec2(0.2, 0.2) + animatedCircle;
     vec2 shapeSize = vec2(0.2, 0.1);
+    float radius = 0.25;
 
     vec2 lightDir = shapePos - mouse;
 
     // SDF shape definition
-    float sdf = sdf_box(uv - shapePos, shapeSize);
+    vec4 sdf = sdgCircle(uv - shapePos, radius);
     vec2 shadowOffset = lightDir;
-    float sdf_shadow = sdf_box(uv - shapePos - shadowOffset, shapeSize);
+    vec4 sdf_shadow = sdgCircle(uv - shapePos - shadowOffset, radius);
 
     vec4 color = u_background;
 
     if (u_mode == 1) {
         // Raw
-        color = vec4(saturate3(sdf), 1.0);
+        color = sdf;
     } else if (u_mode == 2) {
         // Distance
-        float d = sdf * u_distanceVisualisationScale;
+        float d = sdf.r * u_distanceVisualisationScale;
         color.r = saturate(d);
         color.g = saturate(-d);
         color.b = 0.0;
     } else if (u_mode == 3) {
         // Gradient
         // TODO: Implement gradient visualization
-        color.rg = vec2(abs(sdf));
-        color.b = 0.0;
+        color.rg = vec2(abs(sdf.gb));
+        color.b = abs(sdf.r * 5.0);
     } else if (u_mode == 4) {
         // Solid
-        float d = sdf + u_offset;
+        float d = sdf.r + u_offset;
         if (d < 0.0)
             color = u_foreground;
     } else if (u_mode == 5) {
         // Border
-        float d = sdf + u_offset;
+        float d = sdf.r + u_offset;
         if (abs(d) < u_borderWidth)
             color = u_border;
     } else if (u_mode == 6) {
         // SolidWithBorder
-        float d = sdf + u_offset;
+        float d = sdf.r + u_offset;
         if (abs(d) < u_borderWidth) {
             color = u_border;
         } else if (d < 0.0) {
@@ -126,7 +133,7 @@ void main() {
         }
     } else if (u_mode == 7) {
         // Soft border
-        float d = sdf + u_offset;
+        float d = sdf.r + u_offset;
         if (d < -u_borderWidth) {
             //if inside shape by more than u_borderWidth, use pure fill
             color = u_foreground;
@@ -143,7 +150,7 @@ void main() {
         }
     } else if (u_mode == 8) {
         // Neon
-        float d = sdf + u_offset;
+        float d = sdf.r + u_offset;
 
         //only do something if within range of border
         if (d > -u_borderWidth && d < u_borderWidth) {
@@ -161,8 +168,8 @@ void main() {
         }
     } else if (u_mode == 10) {
         // Drop shadow        
-        float d = sdf + u_offset;
-        float d2 = sdf_shadow + u_offset;
+        float d = sdf.r + u_offset;
+        float d2 = sdf_shadow.r + u_offset;
 
         //calculate interpolators (go from 0 to 1 across border)
         float fill_t = 1.0 - saturate((d - u_borderWidth) / u_borderWidth);

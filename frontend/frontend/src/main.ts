@@ -15,7 +15,7 @@ const uniforms = {
     u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
     u_mouse: { value: new THREE.Vector2(0, 0) },
     u_time: { value: 0 },
-    u_mode: { value: 10 },
+    u_mode: { value: 3 },
     u_distanceVisualisationScale: { value: 16 },
     u_offset: { value: 0.005 },
     u_borderWidth: { value: 0.01 },
