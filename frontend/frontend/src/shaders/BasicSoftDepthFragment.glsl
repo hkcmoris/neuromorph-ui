@@ -45,6 +45,40 @@ vec3 saturate3(float x) {
     return vec3(clamp(x, 0.0, 1.0));
 }
 
+// Combining SDF
+vec4 merge(vec4 a, vec4 b) {
+    return min(a, b);
+}
+
+vec4 intersect(vec4 a, vec4 b) {
+    return max(a, b);
+}
+
+vec4 subtract(vec4 a, vec4 b) {
+    return intersect(a, -b);
+}
+
+vec4 interpolate(vec4 a, vec4 b, float t){
+    return lerp(a, b, t);
+}
+
+vec4 round_merge(vec4 a, vec4 b, float r){
+    vec2 intersectionSpaceR = vec2(a.r - r, b.r - r);
+    vec2 intersectionSpaceG = vec2(a.g - r, b.g - r);
+    vec2 intersectionSpaceB = vec2(a.b - r, b.b - r);
+    intersectionSpaceR = min(intersectionSpaceR, 0.0);
+    intersectionSpaceG = min(intersectionSpaceG, 0.0);
+    intersectionSpaceB = min(intersectionSpaceB, 0.0);
+    float insideDistanceR = -length(intersectionSpaceR);
+    float insideDistanceG = -length(intersectionSpaceG);
+    float insideDistanceB = -length(intersectionSpaceB);
+    vec4 simpleUnion = merge(a, b);
+    float outsideDistanceR = max(simpleUnion.r, r);
+    float outsideDistanceG = max(simpleUnion.g, r);
+    float outsideDistanceB = max(simpleUnion.b, r);
+    return vec4(insideDistanceR + outsideDistanceR, insideDistanceG + outsideDistanceG, insideDistanceB + outsideDistanceB, 1.0);
+}
+
 // Signed Distance Function for a line segment
 float sdLine(vec2 p, vec2 a, vec2 b) {
     vec2 pa = p - a, ba = b - a;
@@ -55,7 +89,8 @@ float sdLine(vec2 p, vec2 a, vec2 b) {
 // Signed Distance Function for a box shape
 vec4 sdBox(vec2 p, vec2 b) {
     vec2 d = abs(p) - b;
-    return vec4(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0), 0.0, 0.0, 1.0);
+    return vec4(max(d.x, d.y), 0.0, 0.0, 1.0);
+    // return vec4(length(max(d, 0.0)) + min(max(d.x, d.y), 0.0), 0.0, 0.0, 1.0);
 }
 
 // Signed Distance Function for a soft box shape
@@ -74,28 +109,216 @@ vec4 sdSoftCircle(vec2 p, float r, float s) {
     return vec4(max(length(p) - r, 0.0) - s, 0.0, 0.0, 1.0);
 }
 
-// Signed Distance Gradiant Function for a circle shape
+// Signed Distance Gradient Function for a circle shape
 vec4 sdgCircle(vec2 p, float r) {
     float d = length(p);
     return vec4( d-r, p/d, 1.0);
+}
+
+// Signed Distance Gradient Function for a box shape
+vec4 sdgBox(vec2 p, vec2 b)
+{
+    vec2 w = abs(p) - b;
+    vec2 s = vec2(p.x < 0.0 ? - 1 : 1, p.y < 0.0 ? -1 : 1);
+    float g = max(w.x, w.y);
+    vec2  q = max(w, 0.0);
+    float l = length(q);
+    return vec4(
+        (g > 0.0) ? l : g,
+        s * ((g > 0.0) ? q / l : (
+            (w.x>w.y) ? vec2(1, 0) : vec2(0, 1)
+        )),
+        1.0
+    );
+}
+
+// Signed Distance Gradient Function for a rotated box shape
+vec4 sdgRotatedBox(vec2 p, vec2 b, float r) {
+    float c = cos(r);
+    float s = sin(r);
+    vec2 p_rot = vec2(c * p.x - s * p.y, s * p.x + c * p.y);
+    return sdgBox(p_rot, b);
+}
+
+// Signed Distance Gradient Function for a segment shape
+vec4 sdgSegment(vec2 p, vec2 a, vec2 b, float r )
+{
+    vec2 ba = b - a, pa = p - a;
+    float h = clamp( dot(pa, ba) / dot(ba, ba), 0.0, 1.0 );
+    vec2  q = pa - h * ba;
+    float d = length(q);
+    return vec4(d - r,q / d, 1.0);
+}
+
+float cro( vec2 a, vec2 b ) { return a.x * b.y - a.y * b.x; }
+// Signed Distance Gradient Function for a triangle
+vec4 sdgTriangle(vec2 p, vec2 v[3])
+{
+    float gs = cro(v[0] - v[2], v[1] - v[0]);
+    vec4 res;
+    
+    {
+        vec2  e = v[1] - v[0], w = p - v[0];
+        vec2  q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        float d = dot(q, q), s = gs * cro(w, e);
+        res = vec4(d, q, s);
+    } {
+        vec2  e = v[2] - v[1], w = p - v[1];
+        vec2  q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        float d = dot(q, q), s = gs * cro(w, e);
+        res = vec4( (d < res.x) ? vec3(d, q) : res.xyz,
+                    (s > res.w) ?      s    : res.w );
+    } {
+        vec2  e = v[0] - v[2], w = p - v[2];
+        vec2  q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        float d = dot(q, q), s = gs * cro(w, e);
+        res = vec4(
+            (d < res.x) ? vec3(d, q) : res.xyz,
+            (s > res.w) ? s : res.w
+        );
+    }
+    
+    float d = sqrt(res.x)*sign(res.w);
+    return vec4(d, res.yz / d, 1.0);
+}
+
+// Signed Distance Gradient Function for a polygon
+vec4 sdgPolygon(vec2 p, vec2 v[100], int vertexCount) {
+    float gs = cro(v[0] - v[vertexCount - 1], v[1] - v[0]);
+    vec4 res;
+    
+    for (int i = 0; i < vertexCount; i++) {
+        vec2 a = v[i];
+        vec2 b = v[(i + 1) % vertexCount];
+        vec2 e = b - a;
+        vec2 w = p - a;
+        vec2 q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
+        float d = dot(q, q);
+        float s = gs * cro(w, e);
+        if (i == 0 || d < res.x) {
+            res = vec4(d, q, s);
+        } else if (s > res.w) {
+            res.w = s;
+        }
+    }
+    
+    float d = sqrt(res.x) * sign(res.w);
+    return vec4(d, res.yz / d, 1.0);
+}
+
+// Mouse cursor
+vec4 sdgMouseCursor(
+    vec2 p,
+    vec2 cursorDirection,
+    float cursorArrowWidth,
+    float cursorArrowAnchor,
+    float cursorArrowFlapAnchor,
+    float cursorTailWidth
+) {
+    vec2 mv[3];
+    vec2 mv2[3];
+    vec2 mv3[3];
+    vec2 anchor = cursorDirection * cursorArrowAnchor;
+    vec2 anchorFlap = cursorDirection * cursorArrowFlapAnchor;
+    
+    // Calculate perpendicular directions
+    vec2 perpDirL = vec2(-cursorDirection.y, cursorDirection.x);
+    vec2 perpDirR = vec2(cursorDirection.y, -cursorDirection.x);
+
+    // Translate anchorFlap by cursorArrowWidth in both perpendicular directions
+    vec2 anchorFlapL = anchorFlap + perpDirL * cursorArrowWidth;
+    vec2 anchorFlapR = anchorFlap + perpDirR * cursorArrowWidth;
+
+    vec2 anchorTailL1 = cursorDirection + perpDirL * cursorTailWidth;
+    vec2 anchorTailR1 = cursorDirection + perpDirR * cursorTailWidth;
+
+    // Calculate intersection point anchorTailL0
+    vec2 dirL1 = -cursorDirection;
+    vec2 dirL2 = anchor - anchorFlapL;
+    float t1 = (dirL2.x * (anchorFlapL.y - anchorTailL1.y) - dirL2.y * (anchorFlapL.x - anchorTailL1.x)) / (dirL2.x * dirL1.y - dirL2.y * dirL1.x);
+    vec2 anchorTailL0 = anchorTailL1 + t1 * dirL1;
+    
+    // Calculate intersection point anchorTailL0
+    vec2 dirR1 = -cursorDirection;
+    vec2 dirR2 = anchor - anchorFlapR;
+    float t2 = (dirR2.x * (anchorFlapR.y - anchorTailR1.y) - dirR2.y * (anchorFlapR.x - anchorTailR1.x)) / (dirR2.x * dirR1.y - dirR2.y * dirR1.x);
+    vec2 anchorTailR0 = anchorTailR1 + t2 * dirR1;
+
+    // mv[0] = vec2(0.0,0.0);
+    // mv[1] = anchorFlapR;
+    // mv[2] = anchorTailR0;
+    // mv[3] = anchorTailR1;
+    // mv[4] = anchorTailL1;
+    // mv[5] = anchorTailL0;
+    // mv[6] = anchorFlapL;
+
+    mv[0] = vec2(0.0,0.0);
+    mv[1] = anchorFlapR;
+    mv[2] = anchor;
+
+    mv2[0] = vec2(0.0,0.0);
+    mv2[1] = anchor;
+    mv2[2] = anchorFlapL;
+
+    mv3[0] = vec2(0.0,0.0);
+    mv3[1] = anchorFlapR / 2.0;
+    mv3[2] = anchorFlapL / 2.0;
+
+    return 
+    merge(
+        sdgSegment(p, cursorDirection / 4.0, cursorDirection, cursorTailWidth),
+        merge(
+            merge(
+                sdgTriangle(p, mv),
+                sdgTriangle(p, mv2)
+            ),
+            sdgTriangle(p, mv3)
+        )
+    );
+    
+    //return sdgPolygon(p, mv, 7);
 }
 
 // Main function
 void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
     vec2 mouse = (u_mouse - 0.5 * u_resolution) / u_resolution.y;
-    vec2 animatedCircle = 0.005 * vec2(sin(u_time),cos(u_time));
+    float t = (sin(u_time) + 1.0) / 2.0;
+    vec2 animatedCircle = 0.015 * vec2(sin(u_time),cos(u_time));
 
-    vec2 shapePos = vec2(0.2, 0.2) + animatedCircle;
-    vec2 shapeSize = vec2(0.2, 0.1);
-    float radius = 0.25;
+    vec2 pos_segment_a = vec2(0.2, 0.2);
+    vec2 pos_segment_b = vec2(-0.3, -0.1);
+    float r_segment = 0.05;
+    vec2 pos_circle = vec2(-0.1, 0.0);
+    float r_circle = 0.1;
 
-    vec2 lightDir = shapePos - mouse;
+    vec2 lightDir = normalize(vec2(0.4, 0.6));
 
     // SDF shape definition
-    vec4 sdf = sdgCircle(uv - shapePos, radius);
+    vec2 cursorDirection = vec2(0.1, -0.2);
+    float cursorArrowWidth = 0.35;
+    float cursorArrowAnchor = 0.6;
+    float cursorArrowFlapAnchor = 0.8;
+    float cursorTailWidth = 0.02;
+    vec4 sdMouse = sdgMouseCursor(
+        uv - mouse,
+        cursorDirection,
+        cursorArrowWidth,
+        cursorArrowAnchor,
+        cursorArrowFlapAnchor,
+        cursorTailWidth
+    );
+
+    // vec4 sdf = sdBox(uv - shapePos, shapeSize);
+    vec4 segment = sdgSegment(uv, pos_segment_a, pos_segment_b, r_segment);
+    vec4 circle = sdgCircle(uv - pos_circle, r_circle);
+    vec4 sdf = round_merge(segment, circle, t * 0.2);
+    sdf = round_merge(sdMouse, sdf, 0.1);
     vec2 shadowOffset = lightDir;
-    vec4 sdf_shadow = sdgCircle(uv - shapePos - shadowOffset, radius);
+    //vec4 sdf_shadow = sdBox(uv - shapePos - shadowOffset, shapeSize);
+    vec4 segment_shadow = sdgSegment(uv, pos_segment_a, pos_segment_b - shadowOffset, r_segment);
+    vec4 circle_shadow = sdgCircle(uv - pos_circle - shadowOffset, r_circle);
+    vec4 sdf_shadow = round_merge(segment_shadow, circle_shadow, t * 0.3);
 
     vec4 color = u_background;
 
@@ -111,8 +334,18 @@ void main() {
     } else if (u_mode == 3) {
         // Gradient
         // TODO: Implement gradient visualization
-        color.rg = vec2(abs(sdf.gb));
-        color.b = abs(sdf.r * 5.0);
+
+        // color.rg = vec2(abs(sdf.gb));
+        // color.b = abs(sdf.r * 5.0);
+
+        // coloring
+        vec3 col = (sdf.r > 0.0) ? vec3(0.9, 0.6, 0.3) : vec3(0.4, 0.7, 0.85);
+        col *= 1.0 + vec3(0.5 * sdf.gb, 0.0);
+        //col = vec3(0.5+0.5*g,1.0);
+        col *= 1.0 - 0.5 * exp(-16.0 * abs(sdf.r));
+        col *= 0.9 + 0.1 * cos(150.0 * sdf.r);
+        col = mix( col, vec3(1.0), 1.0 - smoothstep(0.0, 0.01, abs(sdf.r)) );
+        color = vec4(col, 1.0);
     } else if (u_mode == 4) {
         // Solid
         float d = sdf.r + u_offset;
