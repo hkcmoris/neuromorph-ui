@@ -112,7 +112,7 @@ vec4 sdSoftCircle(vec2 p, float r, float s) {
 // Signed Distance Gradient Function for a circle shape
 vec4 sdgCircle(vec2 p, float r) {
     float d = length(p);
-    return vec4( d-r, p/d, 1.0);
+    return vec4( d - r, p / d, 1.0);
 }
 
 // Signed Distance Gradient Function for a box shape
@@ -141,8 +141,7 @@ vec4 sdgRotatedBox(vec2 p, vec2 b, float r) {
 }
 
 // Signed Distance Gradient Function for a segment shape
-vec4 sdgSegment(vec2 p, vec2 a, vec2 b, float r )
-{
+vec4 sdgSegment(vec2 p, vec2 a, vec2 b, float r ) {
     vec2 ba = b - a, pa = p - a;
     float h = clamp( dot(pa, ba) / dot(ba, ba), 0.0, 1.0 );
     vec2  q = pa - h * ba;
@@ -150,10 +149,14 @@ vec4 sdgSegment(vec2 p, vec2 a, vec2 b, float r )
     return vec4(d - r,q / d, 1.0);
 }
 
+vec4 sdSphere(vec3 p, float s) {
+    float d = length(p);
+    return vec4(d - s, 0.0, 0.0, 1.0);
+}
+
 float cro( vec2 a, vec2 b ) { return a.x * b.y - a.y * b.x; }
 // Signed Distance Gradient Function for a triangle
-vec4 sdgTriangle(vec2 p, vec2 v[3])
-{
+vec4 sdgTriangle(vec2 p, vec2 v[3]) {
     float gs = cro(v[0] - v[2], v[1] - v[0]);
     vec4 res;
     
@@ -179,30 +182,6 @@ vec4 sdgTriangle(vec2 p, vec2 v[3])
     }
     
     float d = sqrt(res.x)*sign(res.w);
-    return vec4(d, res.yz / d, 1.0);
-}
-
-// Signed Distance Gradient Function for a polygon
-vec4 sdgPolygon(vec2 p, vec2 v[100], int vertexCount) {
-    float gs = cro(v[0] - v[vertexCount - 1], v[1] - v[0]);
-    vec4 res;
-    
-    for (int i = 0; i < vertexCount; i++) {
-        vec2 a = v[i];
-        vec2 b = v[(i + 1) % vertexCount];
-        vec2 e = b - a;
-        vec2 w = p - a;
-        vec2 q = w - e * clamp(dot(w, e) / dot(e, e), 0.0, 1.0);
-        float d = dot(q, q);
-        float s = gs * cro(w, e);
-        if (i == 0 || d < res.x) {
-            res = vec4(d, q, s);
-        } else if (s > res.w) {
-            res.w = s;
-        }
-    }
-    
-    float d = sqrt(res.x) * sign(res.w);
     return vec4(d, res.yz / d, 1.0);
 }
 
@@ -266,13 +245,13 @@ vec4 sdgMouseCursor(
 
     return 
     merge(
-        sdgSegment(p, cursorDirection / 4.0, cursorDirection, cursorTailWidth),
+        sdgTriangle(p, mv),
         merge(
             merge(
-                sdgTriangle(p, mv),
-                sdgTriangle(p, mv2)
+                sdgSegment(p, cursorDirection / 4.0, cursorDirection, cursorTailWidth),
+                sdgTriangle(p, mv3)
             ),
-            sdgTriangle(p, mv3)
+            sdgTriangle(p, mv2)
         )
     );
     
@@ -291,6 +270,7 @@ void main() {
     float r_segment = 0.05;
     vec2 pos_circle = vec2(-0.1, 0.0);
     float r_circle = 0.1;
+    vec3 pos_sphere = vec3(0.3, 0, 0.15);
 
     vec2 lightDir = normalize(vec2(0.4, 0.6));
 
@@ -312,8 +292,9 @@ void main() {
     // vec4 sdf = sdBox(uv - shapePos, shapeSize);
     vec4 segment = sdgSegment(uv, pos_segment_a, pos_segment_b, r_segment);
     vec4 circle = sdgCircle(uv - pos_circle, r_circle);
-    vec4 sdf = round_merge(segment, circle, t * 0.2);
-    sdf = round_merge(sdMouse, sdf, 0.1);
+    // vec4 sdf = round_merge(segment, circle, t * 0.2);
+    vec4 sdf = sdSphere(pos_sphere, 0.15);
+    // sdf = round_merge(sdMouse, sdf, 0.1);
     vec2 shadowOffset = lightDir;
     //vec4 sdf_shadow = sdBox(uv - shapePos - shadowOffset, shapeSize);
     vec4 segment_shadow = sdgSegment(uv, pos_segment_a, pos_segment_b - shadowOffset, r_segment);
@@ -333,7 +314,6 @@ void main() {
         color.b = 0.0;
     } else if (u_mode == 3) {
         // Gradient
-        // TODO: Implement gradient visualization
 
         // color.rg = vec2(abs(sdf.gb));
         // color.b = abs(sdf.r * 5.0);
