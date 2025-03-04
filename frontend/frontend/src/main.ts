@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import fragmentShader from './shaders/BasicSoftDepthFragment.glsl';
+import fragmentShader from './shaders/Raymarching.glsl';
 import vertexShader from './shaders/BasicSoftDepthVertex.glsl';
 import { GUI } from 'dat.gui';
 

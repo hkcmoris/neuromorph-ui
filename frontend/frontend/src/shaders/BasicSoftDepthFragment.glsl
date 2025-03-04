@@ -1,5 +1,4 @@
 precision highp float;
-varying vec2 vUv;
 uniform vec2 u_resolution;  // Screen resolution
 uniform vec2 u_mouse;       // Mouse position
 uniform float u_time;       // Time for animations
