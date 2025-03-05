@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import fragmentShader from './shaders/Raymarching.glsl';
 import vertexShader from './shaders/BasicSoftDepthVertex.glsl';
 import { GUI } from 'dat.gui';
@@ -12,20 +13,21 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 const uniforms = {
+    projectionMatrix: { value: camera.projectionMatrix },
     u_resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
     u_mouse: { value: new THREE.Vector2(0, 0) },
     u_time: { value: 0 },
-    u_mode: { value: 7 },
-    u_distanceVisualisationScale: { value: 16 },
-    u_offset: { value: 0.0 },
-    u_borderWidth: { value: 0.01 },
-    u_neonPower: { value: 8.0 },
-    u_neonBrightness: { value: 4.0 },
-    u_shadowDist: { value: new THREE.Vector2(0.02, 0.01) },
-    u_shadowBorderWidth: { value: 0.01 },
+    // u_mode: { value: 7 },
+    // u_distanceVisualisationScale: { value: 16 },
+    // u_offset: { value: 0.0 },
+    // u_borderWidth: { value: 0.01 },
+    // u_neonPower: { value: 8.0 },
+    // u_neonBrightness: { value: 4.0 },
+    // u_shadowDist: { value: new THREE.Vector2(0.02, 0.01) },
+    // u_shadowBorderWidth: { value: 0.01 },
     u_foreground: { value: new THREE.Color(0xff0000).toArray().concat([1.0]) }, // Red with full opacity
     u_background: { value: new THREE.Color(0x0000ff).toArray().concat([1.0]) }, // Blue with full opacity
-    u_border: { value: new THREE.Color(0x00ff00).toArray().concat([1.0]) }, // Green with full opacity
+    u_floor: { value: new THREE.Color(0x00ff00).toArray().concat([1.0]) }, // Green with full opacity
 };
 
 let geometry = new THREE.PlaneGeometry(2, 2);
@@ -37,14 +39,23 @@ const material = new THREE.ShaderMaterial({
 });
 
 const mesh = new THREE.Mesh(geometry, material);
-scene.add(mesh);
+mesh.position.z = -1; // Position the quad in front of the camera
+camera.add(mesh); // Add the mesh as a child of the camera
+scene.add(camera); // Add the camera to the scene
 
-camera.position.z = 1;
+const controls = new OrbitControls( camera, renderer.domElement );
+camera.position.x = 5
+camera.position.y = 5;
+camera.position.z = 10;
+controls.target = new THREE.Vector3(0, 0, 0);
+controls.update();
 
 function animate() {
     requestAnimationFrame(animate);
     material.uniforms.u_time.value += 0.01;
     material.uniformsNeedUpdate = true;
+    controls.update();
+
     if (renderer && renderer.getContext().isContextLost() === false) {
         renderer.render(scene, camera);
     }
@@ -78,15 +89,15 @@ resizePlane();
 
 // Set up dat.GUI
 const gui = new GUI();
-gui.add(uniforms.u_mode, 'value', { Raw: 1, Distance: 2, Gradient: 3, Solid: 4, Border: 5, SolidWithBorder: 6, SoftBorder: 7, Neon: 8, DropShadow: 10 }).name('Mode');
-gui.add(uniforms.u_distanceVisualisationScale, 'value', 0, 100).name('Distance Visualization Scale');
-gui.add(uniforms.u_offset, 'value', -0.1, 0.1).name('Offset');
-gui.add(uniforms.u_borderWidth, 'value', 0, 0.1).name('Border Width');
-gui.add(uniforms.u_neonPower, 'value', 0, 10).name('Neon Power');
-gui.add(uniforms.u_neonBrightness, 'value', 0, 10).name('Neon Brightness');
-gui.add(uniforms.u_shadowDist.value, 'x', -0.1, 0.1).name('Shadow Distance X');
-gui.add(uniforms.u_shadowDist.value, 'y', -0.1, 0.1).name('Shadow Distance Y');
-gui.add(uniforms.u_shadowBorderWidth, 'value', 0, 0.1).name('Shadow Border Width');
+// gui.add(uniforms.u_mode, 'value', { Raw: 1, Distance: 2, Gradient: 3, Solid: 4, Border: 5, SolidWithBorder: 6, SoftBorder: 7, Neon: 8, DropShadow: 10 }).name('Mode');
+// gui.add(uniforms.u_distanceVisualisationScale, 'value', 0, 100).name('Distance Visualization Scale');
+// gui.add(uniforms.u_offset, 'value', -0.1, 0.1).name('Offset');
+// gui.add(uniforms.u_borderWidth, 'value', 0, 0.1).name('Border Width');
+// gui.add(uniforms.u_neonPower, 'value', 0, 10).name('Neon Power');
+// gui.add(uniforms.u_neonBrightness, 'value', 0, 10).name('Neon Brightness');
+// gui.add(uniforms.u_shadowDist.value, 'x', -0.1, 0.1).name('Shadow Distance X');
+// gui.add(uniforms.u_shadowDist.value, 'y', -0.1, 0.1).name('Shadow Distance Y');
+// gui.add(uniforms.u_shadowBorderWidth, 'value', 0, 0.1).name('Shadow Border Width');
 
 // Convert THREE.Color to hex string for dat.GUI
 function colorToHex(colorArray: number[]): string {
@@ -107,4 +118,4 @@ function updateColorUniform(uniform: Uniform, hex: string): void {
 
 gui.addColor({ color: colorToHex(uniforms.u_foreground.value) }, 'color').name('Foreground').onChange((value) => updateColorUniform(uniforms.u_foreground, value));
 gui.addColor({ color: colorToHex(uniforms.u_background.value) }, 'color').name('Background').onChange((value) => updateColorUniform(uniforms.u_background, value));
-gui.addColor({ color: colorToHex(uniforms.u_border.value) }, 'color').name('Border').onChange((value) => updateColorUniform(uniforms.u_border, value));
+gui.addColor({ color: colorToHex(uniforms.u_floor.value) }, 'color').name('Floor').onChange((value) => updateColorUniform(uniforms.u_floor, value));

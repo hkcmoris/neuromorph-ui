@@ -71,6 +71,11 @@ float sdLine(vec2 p, vec2 a, vec2 b) {
     return length(pa - ba * h);
 }
 
+// Signed Distance Function for an axis aligned plane
+float sdPlane(vec3 p, vec3 normal, float distance) {
+    return dot(p, normal) - distance;
+}
+
 // Signed Distance Function for a box shape
 float sdBox(vec2 p, vec2 b) {
     vec2 d = abs(p) - b;

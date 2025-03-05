@@ -5,49 +5,36 @@ precision highp float;
 uniform vec2 u_resolution;  // Screen resolution
 uniform vec2 u_mouse;       // Mouse position
 uniform float u_time;       // Time for animations
-uniform int u_mode;         // Mode to switch between different effects
-uniform float u_distanceVisualisationScale;  // Scale for distance visualisation
-uniform float u_offset;     // Offset for the effect
-uniform float u_borderWidth;  // Width of the border
-uniform float u_neonPower;  // Power for the neon effect
-uniform float u_neonBrightness;  // Brightness for the neon effect
-uniform vec2 u_shadowDist;  // Distance for shadow
-uniform float u_shadowBorderWidth;  // Width of the shadow border
 uniform vec4 u_background;  // Background color
 uniform vec4 u_foreground;  // Foreground color
-uniform vec4 u_border;      // Border color
+uniform vec4 u_floor;       // Floor color
+
+uniform mat4 projectionMatrix;
 
 const int MAX_MARCHING_STEPS = 256;
 const float EPSILON = 0.001;
 const float start = 0.0;
 const float end = 100.0;
 
-vec3 getRayDirection(vec2 uv, vec3 cameraPosition, vec3 cameraTarget, float fov) {
-    vec3 forward = normalize(cameraTarget - cameraPosition);
-    vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
-    vec3 up = cross(right, forward);
-    float aspectRatio = u_resolution.x / u_resolution.y;
-    float scale = tan(radians(fov * 0.5));
-    vec3 rayDirection = normalize(forward + uv.x * scale * right + uv.y * scale / aspectRatio * up);
-    return rayDirection;
-}
-
 float sceneSDF(vec3 p, out int material) {
-    vec3 floorBounds = vec3(10.0, 1.0, 10.0);
-    vec3 objectOffset = vec3(0.0, -0.5, 0.0);
+    float floor = sdPlane(p, vec3(0.0, 1.0, 0.0), -1.0);
+    vec3 objectOffset = vec3(0.0, 0.5, 0.0);
+    vec3 objectPosition = p - objectOffset;
+    objectPosition.x = merge(mod(objectPosition.x, 2.0), mod(-objectPosition.x, 2.0));
+    objectPosition.y = merge(mod(objectPosition.y, 2.0), mod(-objectPosition.y, 2.0));
+    objectPosition.z = merge(mod(objectPosition.z, 2.0), mod(-objectPosition.z, 2.0));
 
-    float sphereDist = sdSphere(p + objectOffset, 0.25);
-    float boxDist = sdRoundBox(p + objectOffset, vec3(0.6, 0.1, 0.4), 0.01);
-    float floorDist = sdBox(p + floorBounds.y, floorBounds);
+    float sphereDist = sdSphere(objectPosition, 0.25);
+    float boxDist = sdRoundBox(p - objectOffset, vec3(0.6, 0.1, 0.4), 0.01);
 
-    float objectDist = round_merge(sphereDist, boxDist, 0.4 + sin(u_time) * 0.3);
+    float object = round_merge(sphereDist, boxDist, 0.4 + sin(u_time) * 0.3);
     
-    if (objectDist < floorDist) {
+    if (object < floor) {
         material = 1; // Foreground material
-        return objectDist;
+        return object;
     } else {
         material = 2; // Floor material
-        return floorDist;
+        return floor;
     }
 }
 
@@ -80,6 +67,15 @@ vec3 estimateNormal(vec3 p) {
     ));
 }
 
+vec4 applyGrid(vec3 position, vec4 baseColor) {
+    float gridSize = 1.0;
+    float lineWidth = 0.5;
+    vec2 grid = abs(fract(position.xz / gridSize - 0.5) - 0.5) / fwidth(position.xz / gridSize);
+    float line = min(grid.x, grid.y);
+    float gridPattern = 1.0 - smoothstep(0.0, lineWidth, line);
+    return mix(baseColor, vec4(0.0, 0.0, 0.0, 1.0), gridPattern);
+}
+
 // Main function
 void main() {
     // vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
@@ -87,16 +83,17 @@ void main() {
     vec2 mouse = (u_mouse - 0.5 * u_resolution) / u_resolution.y;
     vec4 color = u_background;
 
-    float radius = 10.0;
-    float angle = u_time * 0.5; // Adjust the speed of the orbit
-    vec3 cameraPosition = vec3(radius * cos(angle), 3.0, radius * sin(angle));
-    vec3 cameraTarget = vec3(0.0, 0.0, 0.0);
-    float fov = 45.0;
-
     // Define the light direction
     vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
 
-    vec3 viewRayDirection = getRayDirection(uv, cameraPosition, cameraTarget, fov);
+    // Convert screen space coordinates to normalized device coordinates (NDC)
+    vec4 ndc = vec4(uv, 1.0, 1.0);
+
+    // Transform NDC to world space
+    vec4 viewRay = inverse(projectionMatrix) * ndc;
+    viewRay = inverse(viewMatrix) * vec4(viewRay.xyz, 0.0);
+    vec3 viewRayDirection = normalize(viewRay.xyz);
+
     int material;
     float depth = raymarch(cameraPosition, viewRayDirection, material);
 
@@ -111,7 +108,8 @@ void main() {
         if (material == 1) {
             color = vec4(u_foreground.rgb * diffuse, u_foreground.a);
         } else if (material == 2) {
-            color = vec4(u_border.rgb * diffuse, u_border.a);
+            color = vec4(u_floor.rgb * diffuse, u_floor.a);
+            color = applyGrid(hitPoint, color);
         }
     }
 
