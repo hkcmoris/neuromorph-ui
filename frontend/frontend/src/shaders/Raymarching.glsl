@@ -7,27 +7,31 @@ uniform vec2 u_mouse;       // Mouse position
 uniform float u_time;       // Time for animations
 uniform vec4 u_background;  // Background color
 uniform vec4 u_foreground;  // Foreground color
-uniform vec4 u_floor;       // Floor color
+uniform vec4 u_lightColor;       // Floor color
+uniform float u_ambient;
 
 uniform mat4 projectionMatrix;
 
 const int MAX_MARCHING_STEPS = 256;
-const float EPSILON = 0.001;
+const float EPSILON = 0.0001;
 const float start = 0.0;
 const float end = 100.0;
 
 float sceneSDF(vec3 p, out int material) {
-    float floor = sdPlane(p, vec3(0.0, 1.0, 0.0), -1.0);
-    vec3 objectOffset = vec3(0.0, 0.5, 0.0);
-    vec3 objectPosition = p - objectOffset;
-    objectPosition.x = merge(mod(objectPosition.x, 2.0), mod(-objectPosition.x, 2.0));
-    objectPosition.y = merge(mod(objectPosition.y, 2.0), mod(-objectPosition.y, 2.0));
-    objectPosition.z = merge(mod(objectPosition.z, 2.0), mod(-objectPosition.z, 2.0));
+    float floor = sdPlane(p, vec3(0.0, 1.0, 0.0), -0.0);
 
-    float sphereDist = sdSphere(objectPosition, 0.25);
-    float boxDist = sdRoundBox(p - objectOffset, vec3(0.6, 0.1, 0.4), 0.01);
+    vec3 spherePosition = p - vec3(sin(u_time) * 3.0, 0.75, 0.0);
+    vec3 boxPosition = p - vec3(0.0, 0.75, 0.0);
+    boxPosition.xy *= rot2D(u_time);
 
-    float object = round_merge(sphereDist, boxDist, 0.4 + sin(u_time) * 0.3);
+    // spherePosition.x = merge(mod(p.x + spherePosition.x, 5.0), mod(p.x - spherePosition.x, 5.0));
+    // spherePosition.y = merge(mod(p.y + spherePosition.y, 5.0), mod(p.z - spherePosition.y, 5.0));
+    // spherePosition.z = merge(mod(p.y + spherePosition.z, 5.0), mod(p.z - spherePosition.z, 5.0));
+
+    float sphere = sdSphere(spherePosition, 0.75, 1.0);
+    float box = sdRoundBox(boxPosition, vec3(0.75, 0.75, 0.75), 0.05, 1.0);
+
+    float object = opSmoothUnion(sphere, box, 2.0);
     
     if (object < floor) {
         material = 1; // Foreground material
@@ -69,7 +73,7 @@ vec3 estimateNormal(vec3 p) {
 
 vec4 applyGrid(vec3 position, vec4 baseColor) {
     float gridSize = 1.0;
-    float lineWidth = 0.5;
+    float lineWidth = 1.5;
     vec2 grid = abs(fract(position.xz / gridSize - 0.5) - 0.5) / fwidth(position.xz / gridSize);
     float line = min(grid.x, grid.y);
     float gridPattern = 1.0 - smoothstep(0.0, lineWidth, line);
@@ -78,13 +82,10 @@ vec4 applyGrid(vec3 position, vec4 baseColor) {
 
 // Main function
 void main() {
-    // vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
-    vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution;
-    vec2 mouse = (u_mouse - 0.5 * u_resolution) / u_resolution.y;
+    vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution;
+    // vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution;
+    // vec2 mouse = (u_mouse - 0.5 * u_resolution) / u_resolution;
     vec4 color = u_background;
-
-    // Define the light direction
-    vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
 
     // Convert screen space coordinates to normalized device coordinates (NDC)
     vec4 ndc = vec4(uv, 1.0, 1.0);
@@ -102,13 +103,14 @@ void main() {
         vec3 normal = estimateNormal(hitPoint);
         
         // Calculate the diffuse lighting
+        vec3 lightDirection = normalize(vec3(1.0, 1.0, 1.0));
         float diffuse = max(dot(normal, lightDirection), 0.0);
 
         // Apply the lighting to the color based on the material
         if (material == 1) {
-            color = vec4(u_foreground.rgb * diffuse, u_foreground.a);
+            color = vec4(u_foreground.rgb * diffuse + u_lightColor.rgb * u_ambient, u_foreground.a);
         } else if (material == 2) {
-            color = vec4(u_floor.rgb * diffuse, u_floor.a);
+            color = vec4(u_background.rgb, u_background.a);
             color = applyGrid(hitPoint, color);
         }
     }

@@ -5,7 +5,7 @@ import vertexShader from './shaders/BasicSoftDepthVertex.glsl';
 import { GUI } from 'dat.gui';
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({
     antialias: true
 });
@@ -27,7 +27,8 @@ const uniforms = {
     // u_shadowBorderWidth: { value: 0.01 },
     u_foreground: { value: new THREE.Color(0xff0000).toArray().concat([1.0]) }, // Red with full opacity
     u_background: { value: new THREE.Color(0x0000ff).toArray().concat([1.0]) }, // Blue with full opacity
-    u_floor: { value: new THREE.Color(0x00ff00).toArray().concat([1.0]) }, // Green with full opacity
+    u_lightColor: { value: new THREE.Color(0xffffff).toArray().concat([1.0]) }, // Green with full opacity
+    u_ambient: { value: 0.2 }
 };
 
 let geometry = new THREE.PlaneGeometry(2, 2);
@@ -44,7 +45,7 @@ camera.add(mesh); // Add the mesh as a child of the camera
 scene.add(camera); // Add the camera to the scene
 
 const controls = new OrbitControls( camera, renderer.domElement );
-camera.position.x = 5
+camera.position.x = 1
 camera.position.y = 5;
 camera.position.z = 10;
 controls.target = new THREE.Vector3(0, 0, 0);
@@ -118,4 +119,4 @@ function updateColorUniform(uniform: Uniform, hex: string): void {
 
 gui.addColor({ color: colorToHex(uniforms.u_foreground.value) }, 'color').name('Foreground').onChange((value) => updateColorUniform(uniforms.u_foreground, value));
 gui.addColor({ color: colorToHex(uniforms.u_background.value) }, 'color').name('Background').onChange((value) => updateColorUniform(uniforms.u_background, value));
-gui.addColor({ color: colorToHex(uniforms.u_floor.value) }, 'color').name('Floor').onChange((value) => updateColorUniform(uniforms.u_floor, value));
+gui.addColor({ color: colorToHex(uniforms.u_lightColor.value) }, 'color').name('Light').onChange((value) => updateColorUniform(uniforms.u_lightColor, value));
